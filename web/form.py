@@ -21,10 +21,22 @@ class Form:
         '<table>\n    <tr><th><label for="x">x</label></th><td><input type="text" id="x" name="x"/></td></tr>\n</table>'
     """
     def __init__(self, *inputs, **kw):
-        self.inputs = inputs
+        self.inputs = self._get_class_inputs() + list(inputs)
         self.valid = True
         self.note = None
-        self.validators = kw.pop('validators', [])
+        self.validators = getattr(self, "validators", []) + kw.pop('validators', [])
+
+    def _get_class_inputs(self):
+        inputs = []
+
+        for name in dir(self.__class__):
+            value = getattr(self.__class__, name)
+            if isinstance(value, Input):
+                value.set_name(name)
+                inputs.append(value)
+
+        inputs.sort(key=lambda i: i._index)
+        return inputs
 
     def __call__(self, x=None):
         o = copy.deepcopy(self)
@@ -110,7 +122,9 @@ class Form:
     d = property(_get_d)
 
 class Input(object):
-    def __init__(self, name, *validators, **attrs):
+    _counter = 0
+
+    def __init__(self, name=None, *validators, **attrs):
         self.name = name
         self.validators = validators
         self.attrs = attrs = AttributeList(attrs)
@@ -120,12 +134,22 @@ class Input(object):
         self.pre = attrs.pop('pre', "")
         self.post = attrs.pop('post', "")
         self.note = None
-        
-        self.id = attrs.setdefault('id', self.get_default_id())
+
+        self._index = Input._counter
+        Input._counter += 1
+
+        if name is None:
+            self.id = None
+        else:
+            self.id = attrs.setdefault('id', self.get_default_id())
         
         if 'class_' in attrs:
             attrs['class'] = attrs['class_']
             del attrs['class_']
+
+    def set_name(self, name):
+        self.name = name
+        self.id = self.attrs.setdefault('id', self.get_default_id())
         
     def is_hidden(self):
         return False
